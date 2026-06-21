@@ -21,3 +21,8 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 
 module.exports = app;
+
+var port = process.env.PORT || 3000;
+app.listen(port, function () {
+  console.log('Server running on http://localhost:' + port);
+});
