@@ -78,4 +78,51 @@ router.post('/logout', requireAuth, async function (req, res) {
   res.json({ message: 'Logged out successfully' });
 });
 
+/* ---------- FORGOT PASSWORD: send reset email ---------- */
+/* Supabase auto-generates a secure token and emails it to the user */
+router.post('/forgot-password', async function (req, res) {
+  var { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'email is required' });
+  }
+
+  var { data, error } = await supabaseAuth.auth.resetPasswordForEmail(email, {
+    redirectTo: process.env.FRONTEND_ORIGIN + '/reset-password'
+  });
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  res.json({ message: 'Password reset email sent', data });
+});
+
+/* ---------- RESET PASSWORD: update with new password ---------- */
+/* The frontend reset-password page extracts the access_token from the
+   reset email link's URL, then sends it here along with the new password */
+router.post('/reset-password', async function (req, res) {
+  var { accessToken, newPassword } = req.body;
+
+  if (!accessToken || !newPassword) {
+    return res.status(400).json({ error: 'accessToken and newPassword are required' });
+  }
+
+  // Step 1: verify the token belongs to a real, valid session
+  var { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+
+  if (userError || !userData.user) {
+    return res.status(401).json({ error: 'Invalid or expired reset token' });
+  }
+
+  // Step 2: update the password using the admin client
+  var { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+    userData.user.id,
+    { password: newPassword }
+  );
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  res.json({ message: 'Password updated successfully', user: data.user });
+});
+
+
 module.exports = router;
