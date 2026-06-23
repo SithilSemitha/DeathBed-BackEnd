@@ -3,9 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn app.ts",
-    "build": "tsc",
-    "start": "node dist/app.js"
+    "dev": "nodemon app.js",
+    "start": "node app.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
