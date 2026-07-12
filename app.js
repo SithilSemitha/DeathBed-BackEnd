@@ -10,6 +10,7 @@ var usersRouter = require('./routes/users');
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var decisionsRouter = require('./routes/decisions'); // add this
+var journalsRouter = require('./routes/journals');
 
 var app = express();
 
@@ -22,7 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/decisions', decisionsRouter); // add this
-
+app.use('/journals', journalsRouter);
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 

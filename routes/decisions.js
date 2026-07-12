@@ -80,4 +80,30 @@ router.get('/financial-comparison', requireAuth, async function (req, res) {
   });
 });
 
+/* ---------- SCRUM-130: Persist Regret Rating with Decision ---------- */
+router.patch('/:id/regret-rating', requireAuth, async function (req, res) {
+  var { regretRating } = req.body;
+
+  if (regretRating === undefined || regretRating === null) {
+    return res.status(400).json({ error: 'regretRating is required' });
+  }
+
+  if (regretRating < 1 || regretRating > 10) {
+    return res.status(400).json({ error: 'regretRating must be between 1 and 10' });
+  }
+
+  var { data, error } = await supabaseAdmin
+    .from('decisions')
+    .update({ regret_rating: regretRating })
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Decision not found' });
+
+  res.json({ decision: data });
+});
+
 module.exports = router;
