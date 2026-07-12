@@ -7,6 +7,9 @@ var logger = require('morgan');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
+var indexRouter = require('./routes/index');
+var usersRouter = require('./routes/users');
+var decisionsRouter = require('./routes/decisions'); // add this
 
 var app = express();
 
@@ -16,6 +19,9 @@ app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173' })
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/', indexRouter);
+app.use('/users', usersRouter);
+app.use('/decisions', decisionsRouter); // add this
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
