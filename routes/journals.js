@@ -23,12 +23,25 @@ router.post('/', requireAuth, async function (req, res) {
 });
 
 /* ---------- Get all journals for logged-in user ---------- */
+/* ---------- SCRUM-140: Journal History Query and Sorting ---------- */
 router.get('/', requireAuth, async function (req, res) {
-  var { data, error } = await supabaseAdmin
+  var { sortBy, order, decisionId } = req.query;
+
+  var validSortFields = ['created_at', 'updated_at'];
+  var validOrders = ['asc', 'desc'];
+
+  var sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+  var sortOrder = validOrders.includes(order) ? order === 'asc' : false;
+
+  var query = supabaseAdmin
     .from('journals')
     .select('*')
     .eq('user_id', req.user.id)
-    .order('created_at', { ascending: false });
+    .order(sortField, { ascending: sortOrder });
+
+  if (decisionId) query = query.eq('decision_id', decisionId);
+
+  var { data, error } = await query;
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ journals: data });
