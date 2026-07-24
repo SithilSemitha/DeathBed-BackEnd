@@ -3,18 +3,100 @@ var router = express.Router();
 var supabaseAdmin = require('../config/supabaseAdmin');
 var { requireAuth } = require('../middleware/auth');
 
-/* Create a new decision */
-router.post('/', requireAuth, async function (req, res) {
-  var { title, category, decisionText, analysis } = req.body;
+// Use global fetch (Node 18+) or require node-fetch if older
+var fetch = global.fetch || require('node-fetch');
 
-  var { data, error } = await supabaseAdmin
+// ML SERVICE CONFIG
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+const ML_TIMEOUT_MS = parseInt(process.env.ML_TIMEOUT_MS || '5000', 10);
+
+// HELPER: Call ML classifier
+
+async function callMLClassifier(decisionText) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ML_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${ML_SERVICE_URL}/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: decisionText }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.detail || `ML service error (${response.status})`);
+    }
+
+    const result = await response.json();
+    return result; // { category, subCategory, confidence, summary, requiresOverride }
+  } catch (error) {
+    clearTimeout(timeout);
+    console.error('ML service call failed:', error.message);
+    throw error;
+  }
+}
+
+// ============================================================
+// ROUTES
+// ============================================================
+
+/* ---------- CLASSIFY a decision (US-004, US-026) ---------- */
+router.post('/classify', requireAuth, async function (req, res) {
+  const { decisionText } = req.body;
+
+  if (!decisionText || decisionText.trim().length < 20) {
+    return res.status(400).json({
+      error: 'Please describe your decision in more detail (at least 20 characters)'
+    });
+  }
+
+  try {
+    const result = await callMLClassifier(decisionText);
+    res.json(result);
+  } catch (error) {
+    res.status(503).json({ error: 'ML service unavailable' });
+  }
+});
+
+/* ---------- CREATE a new decision ---------- */
+router.post('/', requireAuth, async function (req, res) {
+  const {
+    title,
+    category,
+    subCategory,          // optional, from ML
+    decisionText,
+    analysis,
+    choice,               // optional
+    classificationConfidence, // optional
+    userOverrodeClassification // optional boolean
+  } = req.body;
+
+  // Build the analysis object (preserve existing fields, add ML meta if provided)
+  const analysisObj = analysis || {};
+  if (classificationConfidence !== undefined) {
+    analysisObj.classification_confidence = classificationConfidence;
+  }
+  if (subCategory) {
+    analysisObj.sub_category = subCategory;
+  }
+  if (userOverrodeClassification !== undefined) {
+    analysisObj.user_overrode_classification = userOverrodeClassification;
+  }
+
+  const { data, error } = await supabaseAdmin
     .from('decisions')
     .insert({
       user_id: req.user.id,
       title: title,
       category: category,
       decision_text: decisionText,
-      analysis: analysis
+      choice: choice || null,
+      analysis: analysisObj
     })
     .select()
     .single();
@@ -23,7 +105,7 @@ router.post('/', requireAuth, async function (req, res) {
   res.json({ decision: data });
 });
 
-/* Fetch all of the logged-in user's decisions, with optional filtering */
+/* ---------- Fetch all decisions ---------- */
 router.get('/', requireAuth, async function (req, res) {
   var { category, from } = req.query;
 
@@ -42,7 +124,7 @@ router.get('/', requireAuth, async function (req, res) {
   res.json({ decisions: data });
 });
 
-/* ---------- SCRUM-105: Provide Financial Comparison Data ---------- */
+/* ---------- SCRUM-105: Financial Comparison ---------- */
 router.get('/financial-comparison', requireAuth, async function (req, res) {
   var { category } = req.query;
 
@@ -80,7 +162,7 @@ router.get('/financial-comparison', requireAuth, async function (req, res) {
   });
 });
 
-/* ---------- SCRUM-130: Persist Regret Rating with Decision ---------- */
+/* ---------- SCRUM-130: Regret Rating ---------- */
 router.patch('/:id/regret-rating', requireAuth, async function (req, res) {
   var { regretRating } = req.body;
 
